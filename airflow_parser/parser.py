@@ -99,7 +99,7 @@ class DAGGenerator:
                         ops.append(op)
                 chain(*ops)
                 print(dag)
-                globals()[flow_spec["name"]] = dag
+                yield dag
 
 
 if __name__ == '__main__':
