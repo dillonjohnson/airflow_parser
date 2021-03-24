@@ -7,7 +7,7 @@ import yaml
 from airflow.models import DAG
 from airflow.models.baseoperator import chain
 
-from providers.carte.operators.carte import CarteExecuteJobOperator, CarteCheckJobOperator, \
+from .providers.carte.operators.carte import CarteExecuteJobOperator, CarteCheckJobOperator, \
     CarteGenerateRuntimeParametersOperator
 
 
@@ -81,7 +81,9 @@ class DAGGenerator:
                         execute_task_id = f'execute_carte_{step["name"]}'
                         op = CarteExecuteJobOperator(task_id=execute_task_id,
                                                      repository_name=step['parameters']['repository_name'],
-                                                     job_name='/'.join(step['etl_platform_filename'].split('/')[1:]).replace('.kjb', ''),
+                                                     job_name='/'.join(
+                                                         step['etl_platform_filename'].split('/')[1:]).replace('.kjb',
+                                                                                                               ''),
                                                      carte_user=carte_user,
                                                      carte_password=carte_password,
                                                      carte_level='Basic',
@@ -89,7 +91,8 @@ class DAGGenerator:
                         ops.append(op)
                         op = CarteCheckJobOperator(task_id=f'check_carte_{step["name"]}',
                                                    carte_user=carte_user,
-                                                   job_name=step['etl_platform_filename'].split('/')[-1].replace('.kjb', ''),
+                                                   job_name=step['etl_platform_filename'].split('/')[-1].replace('.kjb',
+                                                                                                                 ''),
                                                    carte_password=carte_password,
                                                    job_execute_task_id=execute_task_id,
                                                    host=host)
@@ -97,3 +100,7 @@ class DAGGenerator:
                 chain(*ops)
                 print(dag)
                 globals()[flow_spec["name"]] = dag
+
+
+if __name__ == '__main__':
+    d = DAGGenerator('tmp')
