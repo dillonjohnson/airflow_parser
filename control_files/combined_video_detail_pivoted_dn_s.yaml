@@ -1,0 +1,22 @@
+name: combined_video_detail_pivoted_dn_s
+type: step_specification
+description: combined_video_detail_pivoted_dn_s
+source_data:
+  - name: primary_source
+    database: analytics
+    table: youtube_video
+target_data:
+  - name: primary_target
+    database: data_warehouse
+    table: fact_combined_video_detail_pivoted_dn
+    s3: s3://goalcast-data-warehouse/fact_combined_video_detail_pivoted_dn/
+    quicksight_spice_refresh: d69b30eb-c972-4031-b7fd-155a1296443b
+etl_platform: athena
+etl_platform_filename: athena/fact_combined_video_detail_pivoted_dn.sql
+parameters:
+  version: '1.0'
+notifications:
+  fail: dillon.johnson@redfield.se
+  success: dillon.johnson@redfield.se
+error_handling:
+  fail: retry-3

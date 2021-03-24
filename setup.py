@@ -6,7 +6,11 @@ setup(
     packages=['airflow_parser',
               'airflow_parser.providers',
               'airflow_parser.providers.carte',
-              'airflow_parser.providers.carte.operators'],  # Chose the same as "name"
+              'airflow_parser.providers.carte.operators',
+              'airflow_parser.providers.aws',
+              'airflow_parser.providers.aws.operators',
+              'airflow_parser.providers.google',
+              'airflow_parser.providers.google.operators'],  # Chose the same as "name"
     version='0.2',  # Start with a small number and increase it with every change you make
     license='MIT',  # Chose a license from here: https://help.github.com/articles/licensing-a-repository
     description='Parses over control files to create dynamic DAGs.',  # Give a short description about your library

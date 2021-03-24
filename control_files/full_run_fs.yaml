@@ -1,0 +1,8 @@
+name: full_run_fs
+type: flow_specification
+description: Flow for full_run_fs
+version: 1
+schedule: 0 * * * *
+flow:
+  -
+    - combined_video_detail_pivoted_dn_s

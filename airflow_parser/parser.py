@@ -10,11 +10,21 @@ from airflow.models.baseoperator import chain
 from airflow_parser.providers.carte.operators.carte import CarteExecuteJobOperator, CarteCheckJobOperator, \
     CarteGenerateRuntimeParametersOperator
 
+from airflow_parser.providers.aws.operators.aws import AthenaOperator, QuicksightSpiceRefreshOperator, \
+    QuicksightSpiceRefreshSensor
+
+from airflow_parser.providers.google.operators.google import BigqueryDataTransferOperator
+
 
 class DAGGenerator:
     def __init__(self,
-                 control_file_path: str):
+                 control_file_path: str,
+                 etl_scripts_path: str,
+                 dag_owners: str):
         self.control_file_path = control_file_path
+        self.etl_scripts_path = etl_scripts_path
+        self.dag_owners = dag_owners
+
 
     def generate_dags(self):
         control_file_path = getenv('CONTROL_FILE_PATH', self.control_file_path)
@@ -47,7 +57,7 @@ class DAGGenerator:
                         step_specs[yaml_object['name']] = yaml_object
 
         DEFAULT_ARGS = {
-            'owner': 'BioIQ',
+            'owner': self.dag_owners,
             'start_date': datetime(2020, 1, 1),  # Abitrary date in the past, won't matter since catchup=False
             'depends_on_past': False,
             # 'on_failure_callback': on_failure_callback
@@ -55,52 +65,67 @@ class DAGGenerator:
 
         for flow_spec in flow_specs:
             with DAG(dag_id=flow_spec['name'],
-                     schedule_interval=flow_spec.get('schedule', None),
+                     schedule_interval=flow_spec['schedule'],
                      catchup=False,
                      default_args=DEFAULT_ARGS,
                      max_active_runs=1) as dag:
-                ops = []
-                args_list = set()
-                for step_spec in flow_spec['flow']:
-                    step = step_specs[step_spec]
-                    if 'runtime_parameters' in step:
-                        for item in step['runtime_parameters']:
-                            args_list.add(item)
-                if len(args_list) > 0:
-                    op = CarteGenerateRuntimeParametersOperator(task_id='generate_runtime_params',
-                                                                args_list=list(args_list))
-                    ops.append(op)
-                for step_spec in flow_spec['flow']:
-                    step = step_specs[step_spec]
-                    etl_platform = step['etl_platform']
-                    if etl_platform == 'pentaho':
-                        carte_user = getenv('CARTE_USER')
-                        carte_password = getenv('CARTE_PASSWORD')
-                        host = getenv('CARTE_HOST')
-                        job_name = step['etl_platform_filename']
-                        execute_task_id = f'execute_carte_{step["name"]}'
-                        op = CarteExecuteJobOperator(task_id=execute_task_id,
-                                                     repository_name=step['parameters']['repository_name'],
-                                                     job_name='/'.join(
-                                                         step['etl_platform_filename'].split('/')[1:]).replace('.kjb',
-                                                                                                               ''),
-                                                     carte_user=carte_user,
-                                                     carte_password=carte_password,
-                                                     carte_level='Basic',
-                                                     host=host)
-                        ops.append(op)
-                        op = CarteCheckJobOperator(task_id=f'check_carte_{step["name"]}',
-                                                   carte_user=carte_user,
-                                                   job_name=step['etl_platform_filename'].split('/')[-1].replace('.kjb',
-                                                                                                                 ''),
-                                                   carte_password=carte_password,
-                                                   job_execute_task_id=execute_task_id,
-                                                   host=host)
-                        ops.append(op)
-                chain(*ops)
-                print(dag)
+                previous_step_ops = []
+                sensor_op = None
+                flow_ops = {}
+                for idx, items in enumerate(flow_spec['flow']):
+                    flow_ops[str(idx)] = list()
+                    for s in items:
+                        step = step_specs[s]
+                        etl_platform = step['etl_platform']
+                        if etl_platform == 'athena':
+                            op = AthenaOperator(
+                                task_id=str(idx) + '_' + step['name'],
+                                sql=io.open('/usr/local/airflow/etl_scripts/' + step['etl_platform_filename']).read(),
+                                target_database=step['target_data'][0]['database'],
+                                target_table=step['target_data'][0]['table'],
+                                target_s3=step['target_data'][0]['s3']
+                            )
+                        elif etl_platform == 'bigquery_transfer':
+                            op = BigqueryDataTransferOperator(
+                                task_id=str(idx) + '_' + step['name'],
+                                transfer_config_id=step['parameters']['transfer_config_id'],
+                                project_id='124540193406',
+                                wait_before_start=step['parameters'].get('wait_before_start', None),
+                                truncate_target=step['parameters'].get('truncate_target', False),
+                                target_table=step['target_data'][0]['table'],
+                                target_database=step['target_data'][0]['database']
+                            )
+
+                        spice_refresh = step.get('target_data', [{}])[0].get('quicksight_spice_refresh', None)
+                        if spice_refresh:
+                            trigger_task_id = f'trigger_spice_{str(idx)}_{step["name"]}'
+                            trigger_op = QuicksightSpiceRefreshOperator(task_id=trigger_task_id,
+                                                                        quicksight_dataset_id=spice_refresh,
+                                                                        aws_account_id=getenv('AWS_ACCOUNT_ID'))
+
+                            sensor_op = QuicksightSpiceRefreshSensor(task_id=f'sensor_spice_{str(idx)}_{step["name"]}',
+                                                                     quicksight_dataset_id=spice_refresh,
+                                                                     spice_trigger_task_id=trigger_task_id,
+                                                                     aws_account_id=getenv('AWS_ACCOUNT_ID'))
+
+                            op >> trigger_op >> sensor_op
+                            flow_ops[str(idx)].append([op, trigger_op, sensor_op])
+                        else:
+                            flow_ops[str(idx)].append(op)
+
+                    previous_steps = []
+                    for k, current_step_ops in flow_ops.items():
+                        for current_op in current_step_ops:
+                            if isinstance(current_op, list):
+                                current_op = current_op[0]
+                            for previous_step in previous_steps:
+                                if isinstance(previous_step, list):
+                                    previous_step = previous_step[2]
+                                previous_step >> current_op
+                        previous_steps = current_step_ops
                 yield dag
 
 
-if __name__ == '__main__':
-    d = DAGGenerator('tmp')
+# if __name__ == '__main__':
+#     d = DAGGenerator("")
+#     dags = list(d.generate_dags())

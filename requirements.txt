@@ -1,2 +1,5 @@
 apache-airflow
 xmltodict
+boto3
+google-cloud-bigquery-datatransfer
+google-cloud-bigquery
