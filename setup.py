@@ -21,7 +21,8 @@ setup(
     keywords=['apache-airflow', 'parser'],  # Keywords that define your package best
     install_requires=[  # I get to this in a second
         'apache-airflow',
-        'xmltodict'
+        'xmltodict',
+        'boto3'
     ],
     classifiers=[
         'Development Status :: 3 - Alpha',
