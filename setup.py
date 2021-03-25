@@ -22,7 +22,9 @@ setup(
     install_requires=[  # I get to this in a second
         'apache-airflow',
         'xmltodict',
-        'boto3'
+        'boto3',
+        'google-cloud-bigquery-datatransfer',
+        'google-cloud-bigquery'
     ],
     classifiers=[
         'Development Status :: 3 - Alpha',
