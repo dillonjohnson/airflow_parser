@@ -93,7 +93,7 @@ class DAGGenerator:
                                 target_s3=step['target_data'][0]['s3']
                             )
                         elif etl_platform == 'glue':
-                            additional_job_config = step.parameters.copy()
+                            additional_job_config = step.get('parameters', {}).copy()
                             remove_keys = ['glue_max_capacity', 'python_version']
                             for key in remove_keys:
                                 try:
