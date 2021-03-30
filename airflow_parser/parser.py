@@ -107,7 +107,8 @@ class DAGGenerator:
                             if self.debugwin:
                                 this_python_local_path = etl_scripts[f'\\{step["etl_platform_filename"]}'][0]
                             else:
-                                this_python_local_path = etl_scripts[f'{step["etl_platform"]}/{step["etl_platform_filename"]}'][0]
+                                #this_python_local_path = etl_scripts[f'{step["etl_platform"]}/{step["etl_platform_filename"]}'][0]
+                                this_python_local_path = etl_scripts[f'/{step["etl_platform_filename"]}'][0]
 
                             op = GlueOperator(
                                 task_id=step['name'],
